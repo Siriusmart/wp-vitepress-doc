@@ -1,7 +1,36 @@
 import assert = require("assert")
 import webpan = require("webpan")
+import rehypeStringify from "rehype-stringify"
+import { unified } from "unified"
 import type { ProcessorOutputRaw } from "webpan/dist/types/processorStates";
 import type UnifiedProcessor from "wp-unified"
+import type { ElementContent, Root } from "hast"
+import path from "path";
+
+function runRename(expr: string, pathToProccess: string) {
+    function ext(newExt: string) {
+        return (pathAny: string) => {
+            let parsed = path.parse(pathAny)
+            return path.format({
+                ext: newExt,
+                name: parsed.name,
+                dir: parsed.dir
+            })
+        }
+    }
+
+    if (/^[a-z0-9]+$/i.test(expr))
+        expr = `ext("${expr}")`
+
+    let f = eval(expr);
+
+    if (typeof f === "function")
+        return `${f(pathToProccess)}`
+    else {
+        console.warn(`"${expr}" cannot be used as a rename function`);
+        return pathToProccess
+    }
+}
 
 export default class VitepressDocProcessor extends webpan.Processor {
     async build(content: Buffer | "dir"): Promise<ProcessorOutputRaw> {
@@ -26,13 +55,115 @@ export default class VitepressDocProcessor extends webpan.Processor {
                 pluginIndex = index;
         }
 
-        if(pluginIndex === null)
+        if (pluginIndex === null)
             throw new Error("no unified plugin with property \"vpUseAst\"")
 
         let unifiedRes: UnifiedProcessor = await unifiedProc.getProcessor() as UnifiedProcessor
-        let snapshot = unifiedRes.getResult(pluginIndex)?.snapshot;
-        console.log(snapshot)
+        let snapshot: Root = unifiedRes.getResult(pluginIndex)?.snapshot;
 
-        return {}
+        let outputAst: Root = {
+            type: 'root',
+            children: [
+                { type: 'doctype' },
+                {
+                    type: 'element',
+                    tagName: 'html',
+                    properties: { lang: 'en' },
+                    children: [
+                        {
+                            type: 'element',
+                            tagName: 'head',
+                            properties: {},
+                            children: [
+                                {
+                                    type: 'element',
+                                    tagName: 'meta',
+                                    properties: { charSet: 'UTF-8' },
+                                    children: [],
+                                },
+                                {
+                                    type: 'element',
+                                    tagName: 'meta',
+                                    properties: {
+                                        name: 'viewport',
+                                        content: 'width=device-width, initial-scale=1'
+                                    },
+                                    children: [],
+                                },
+                                {
+                                    type: 'element',
+                                    tagName: 'title',
+                                    properties: {},
+                                    children: [],
+                                },
+                                {
+                                    type: 'element',
+                                    tagName: 'link',
+                                    properties: { href: 'styles.css', rel: ['stylesheet'] },
+                                    children: [],
+                                },
+                            ],
+                        },
+                        {
+                            type: 'element',
+                            tagName: 'body',
+                            properties: { className: ['dark'] },
+                            children: [
+                                {
+                                    type: 'element',
+                                    tagName: 'div',
+                                    properties: { className: ['vp-layout'] },
+                                    children: [
+                                        {
+                                            type: 'element',
+                                            tagName: 'aside',
+                                            properties: { className: ['vp-sidebar'] },
+                                            children: [
+                                                {
+                                                    type: 'element',
+                                                    tagName: 'nav',
+                                                    properties: { className: ['vp-sidebar-nav'] },
+                                                    children: [],
+                                                },
+                                            ],
+                                        },
+                                        {
+                                            type: 'element',
+                                            tagName: 'div',
+                                            properties: { className: ['vp-doc-container'] },
+                                            children: [
+                                                {
+                                                    type: 'element',
+                                                    tagName: 'main',
+                                                    properties: { className: ['vp-doc'] },
+                                                    children: structuredClone(snapshot.children) as ElementContent[],
+                                                },
+                                            ],
+                                        },
+                                    ],
+                                },
+                                {
+                                    type: 'element',
+                                    tagName: 'script',
+                                    properties: { src: './script.js' },
+                                    children: [],
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+            data: { quirksMode: false },
+        }
+
+        let output = unified()
+            .use(rehypeStringify, { allowDangerousHtml: true })
+            .stringify(outputAst)
+
+        let outPath = runRename(`${this.settings().output}`, this.filePath());
+
+        return {
+            relative: new Map([[outPath, { buffer: output, priority: this.settings().priority ?? 0 }]]),
+        }
     }
 }

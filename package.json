@@ -24,6 +24,9 @@
         "@types/node": "^24.4.0"
     },
     "dependencies": {
+        "@types/hast": "^3.0.4",
+        "rehype-stringify": "^10.0.1",
+        "unified": "^11.0.5",
         "webpan": "*",
         "wp-unified": "^0.1.22"
     }
