@@ -45,6 +45,17 @@ export default class VitepressDocProcessor extends WProcessor {
             throw new Error("no unified plugin with property \"vpUseAst\"");
         let unifiedRes = await unifiedProc.getProcessor();
         let snapshot = unifiedRes.getResult(pluginIndex)?.snapshot;
+        let parentHeight = 0;
+        let parentPath = this.filePath({ absolute: true }).split("/");
+        let resourceProc = undefined;
+        while (parentPath.length > 1) {
+            parentPath.pop();
+            let path = `${parentPath.join("/")}/`;
+            resourceProc = this.files({ include: path, absolute: true }).get("/")?.procs({ include: "vitepress-resources" }).get("vitepress-resources")?.values().next().value;
+            if (resourceProc !== undefined)
+                break;
+            parentHeight++;
+        }
         let outputAst = {
             type: 'root',
             children: [
@@ -83,7 +94,7 @@ export default class VitepressDocProcessor extends WProcessor {
                                 {
                                     type: 'element',
                                     tagName: 'link',
-                                    properties: { href: 'styles.css', rel: ['stylesheet'] },
+                                    properties: { href: `./${"../".repeat(parentHeight)}vp-styles.css`, rel: ['stylesheet'] },
                                     children: [],
                                 },
                             ],
@@ -129,7 +140,7 @@ export default class VitepressDocProcessor extends WProcessor {
                                 {
                                     type: 'element',
                                     tagName: 'script',
-                                    properties: { src: './script.js' },
+                                    properties: { src: `./${"../".repeat(parentHeight)}vp-script.js` },
                                     children: [],
                                 },
                             ],

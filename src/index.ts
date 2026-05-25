@@ -3,6 +3,7 @@ import { ElementContent, Root } from "hast";
 import path from "path";
 import rehypeStringify from "rehype-stringify";
 import { unified } from "unified";
+import Processor from "webpan/dist/types/processor.js";
 import WProcessor from "webpan/dist/types/processor.js";
 import { ProcessorOutputRaw } from "webpan/dist/types/processorStates.js";
 import UnifiedProcessor from "wp-unified";
@@ -61,6 +62,21 @@ export default class VitepressDocProcessor extends WProcessor {
         let unifiedRes: UnifiedProcessor = await unifiedProc.getProcessor() as unknown as UnifiedProcessor
         let snapshot: Root = unifiedRes.getResult(pluginIndex)?.snapshot;
 
+        let parentHeight = 0;
+        let parentPath = this.filePath({ absolute: true }).split("/")
+        let resourceProc: WProcessor | undefined = undefined;
+
+        while (parentPath.length > 1) {
+            parentPath.pop();
+            let path = `${parentPath.join("/")}/`
+            resourceProc = this.files({ include: path, absolute: true }).get("/")?.procs({ include: "vitepress-resources" }).get("vitepress-resources")?.values().next().value as unknown as Processor
+
+            if(resourceProc !== undefined)
+                break;
+
+            parentHeight++;
+        }
+
         let outputAst: Root = {
             type: 'root',
             children: [
@@ -99,7 +115,7 @@ export default class VitepressDocProcessor extends WProcessor {
                                 {
                                     type: 'element',
                                     tagName: 'link',
-                                    properties: { href: 'styles.css', rel: ['stylesheet'] },
+                                    properties: { href: `./${"../".repeat(parentHeight)}vp-styles.css`, rel: ['stylesheet'] },
                                     children: [],
                                 },
                             ],
@@ -145,7 +161,7 @@ export default class VitepressDocProcessor extends WProcessor {
                                 {
                                     type: 'element',
                                     tagName: 'script',
-                                    properties: { src: './script.js' },
+                                    properties: { src: `./${"../".repeat(parentHeight)}vp-script.js` },
                                     children: [],
                                 },
                             ],
