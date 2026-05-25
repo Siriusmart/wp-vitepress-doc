@@ -1,11 +1,11 @@
-import assert = require("assert")
-import webpan = require("webpan")
-import rehypeStringify from "rehype-stringify"
-import { unified } from "unified"
-import type { ProcessorOutputRaw } from "webpan/dist/types/processorStates";
-import type UnifiedProcessor from "wp-unified"
-import type { ElementContent, Root } from "hast"
+import assert from "assert";
+import { ElementContent, Root } from "hast";
 import path from "path";
+import rehypeStringify from "rehype-stringify";
+import { unified } from "unified";
+import WProcessor from "webpan/dist/types/processor.js";
+import { ProcessorOutputRaw } from "webpan/dist/types/processorStates.js";
+import UnifiedProcessor from "wp-unified";
 
 function runRename(expr: string, pathToProccess: string) {
     function ext(newExt: string) {
@@ -32,7 +32,7 @@ function runRename(expr: string, pathToProccess: string) {
     }
 }
 
-export default class VitepressDocProcessor extends webpan.Processor {
+export default class VitepressDocProcessor extends WProcessor {
     async build(content: Buffer | "dir"): Promise<ProcessorOutputRaw> {
         if (content === "dir") return {}
 
@@ -58,7 +58,7 @@ export default class VitepressDocProcessor extends webpan.Processor {
         if (pluginIndex === null)
             throw new Error("no unified plugin with property \"vpUseAst\"")
 
-        let unifiedRes: UnifiedProcessor = await unifiedProc.getProcessor() as UnifiedProcessor
+        let unifiedRes: UnifiedProcessor = await unifiedProc.getProcessor() as unknown as UnifiedProcessor
         let snapshot: Root = unifiedRes.getResult(pluginIndex)?.snapshot;
 
         let outputAst: Root = {

@@ -1,6 +1,6 @@
-import webpan = require("webpan");
-import type { ProcessorOutputRaw } from "webpan/dist/types/processorStates";
-export default class VitepressDocProcessor extends webpan.Processor {
+import WProcessor from "webpan/dist/types/processor.js";
+import { ProcessorOutputRaw } from "webpan/dist/types/processorStates.js";
+export default class VitepressDocProcessor extends WProcessor {
     build(content: Buffer | "dir"): Promise<ProcessorOutputRaw>;
 }
 //# sourceMappingURL=index.d.ts.map

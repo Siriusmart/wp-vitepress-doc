@@ -1,18 +1,13 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const assert = require("assert");
-const webpan = require("webpan");
-const rehype_stringify_1 = __importDefault(require("rehype-stringify"));
-const unified_1 = require("unified");
-const path_1 = __importDefault(require("path"));
+import assert from "assert";
+import path from "path";
+import rehypeStringify from "rehype-stringify";
+import { unified } from "unified";
+import WProcessor from "webpan/dist/types/processor.js";
 function runRename(expr, pathToProccess) {
     function ext(newExt) {
         return (pathAny) => {
-            let parsed = path_1.default.parse(pathAny);
-            return path_1.default.format({
+            let parsed = path.parse(pathAny);
+            return path.format({
                 ext: newExt,
                 name: parsed.name,
                 dir: parsed.dir
@@ -29,7 +24,7 @@ function runRename(expr, pathToProccess) {
         return pathToProccess;
     }
 }
-class VitepressDocProcessor extends webpan.Processor {
+export default class VitepressDocProcessor extends WProcessor {
     async build(content) {
         if (content === "dir")
             return {};
@@ -144,8 +139,8 @@ class VitepressDocProcessor extends webpan.Processor {
             ],
             data: { quirksMode: false },
         };
-        let output = (0, unified_1.unified)()
-            .use(rehype_stringify_1.default, { allowDangerousHtml: true })
+        let output = unified()
+            .use(rehypeStringify, { allowDangerousHtml: true })
             .stringify(outputAst);
         let outPath = runRename(`${this.settings().output}`, this.filePath());
         return {
@@ -153,5 +148,4 @@ class VitepressDocProcessor extends webpan.Processor {
         };
     }
 }
-exports.default = VitepressDocProcessor;
 //# sourceMappingURL=index.js.map
