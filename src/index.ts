@@ -1,9 +1,10 @@
 import assert from "assert";
-import { ElementContent, Root } from "hast";
+import { Element, ElementContent, Root } from "hast";
 import path from "path";
 import rehypeStringify from "rehype-stringify";
 import { unified } from "unified";
-import Processor from "webpan/dist/types/processor.js";
+import { FileNamedProcOne } from "webpan/dist/types/processor.js";
+import type { TocEntryOrdered } from "wp-dir-toc"
 import WProcessor from "webpan/dist/types/processor.js";
 import { ProcessorOutputRaw } from "webpan/dist/types/processorStates.js";
 import UnifiedProcessor from "wp-unified";
@@ -64,18 +65,104 @@ export default class VitepressDocProcessor extends WProcessor {
 
         let parentHeight = 0;
         let parentPath = this.filePath({ absolute: true }).split("/")
-        let resourceProc: WProcessor | undefined = undefined;
+        let resourceProc: FileNamedProcOne | undefined = undefined;
 
+        // finding vitepress resources
         while (parentPath.length > 1) {
             parentPath.pop();
             let path = `${parentPath.join("/")}/`
-            resourceProc = this.files({ include: path, absolute: true }).get("/")?.procs({ include: "vitepress-resources" }).get("vitepress-resources")?.values().next().value as unknown as Processor
+            resourceProc = this.files({ include: path, absolute: true }).values().next()?.value?.procs({ include: "vitepress-resources" }).get("vitepress-resources")?.values().next().value as unknown as FileNamedProcOne
 
-            if(resourceProc !== undefined)
+            if (resourceProc !== undefined)
                 break;
 
             parentHeight++;
         }
+
+        let dirTocHeight = 0;
+        let dirTocPath = this.filePath({ absolute: true }).split("/")
+        let dirTocProc: FileNamedProcOne | undefined = undefined;
+
+        // finding dir-toc
+        while (dirTocPath.length > 1) {
+            dirTocPath.pop();
+            let path = `${dirTocPath.join("/")}/`
+            dirTocProc = this.files({ include: path, absolute: true }).values().next()?.value?.procs({ include: "dir-toc" }).get("dir-toc")?.values().next().value as unknown as FileNamedProcOne
+
+            if (dirTocProc !== undefined)
+                break;
+
+            dirTocHeight++;
+        }
+
+        let dirTocProcRes = await dirTocProc?.getResult();
+        if (dirTocProcRes === undefined)
+            throw new Error("could not find dir-toc in parent of current file")
+
+        function tocSkeleton(entry: TocEntryOrdered): Element {
+            switch (entry.type) {
+                case "file":
+                    return {
+                        type: 'element',
+                        tagName: 'div',
+                        properties: { className: ['container'] },
+                        children: [
+                            {
+                                type: 'element',
+                                tagName: 'a',
+                                properties: { href: '' },
+                                children: [
+                                    {
+                                        type: 'text',
+                                        value: path.parse(entry.sourceRel).base,
+                                    }
+                                ],
+                            },
+                        ],
+                    }
+                case "dir":
+                    return {
+                        type: "element",
+                        tagName: "div",
+                        properties: { className: ['group'] },
+                        children: [
+                            {
+                                type: 'element',
+                                tagName: 'section',
+                                properties: { className: ['collapsible'] },
+                                children: [
+                                    {
+                                        type: 'element',
+                                        tagName: 'div',
+                                        properties: { className: ['nav-section-title'] },
+                                        children: [
+                                            {
+                                                type: 'text',
+                                                value: path.parse(entry.sourceRel).base,
+                                            }
+                                        ],
+                                    },
+                                    {
+                                        type: 'element',
+                                        tagName: 'div',
+                                        properties: { className: ['nav-section-items'] },
+                                        children: entry.children.map(tocSkeleton)
+                                    },
+                                ],
+                            },
+                        ]
+                    }
+            }
+        }
+
+        let entries = dirTocProcRes.result as TocEntryOrdered;
+        let navElem: Element[];
+
+        // strip one layer if top level are all dirs
+        if (entries.type === "dir" && entries.children.every(child => child.type === "dir"))
+            navElem = entries.children.map(tocSkeleton)
+        else
+            navElem = [tocSkeleton(entries)]
 
         let outputAst: Root = {
             type: 'root',
@@ -139,7 +226,7 @@ export default class VitepressDocProcessor extends WProcessor {
                                                     type: 'element',
                                                     tagName: 'nav',
                                                     properties: { className: ['vp-sidebar-nav'] },
-                                                    children: [],
+                                                    children: navElem,
                                                 },
                                             ],
                                         },
