@@ -134,6 +134,17 @@ export default class VitepressDocProcessor extends WProcessor {
             navElem = entries.children.map(tocSkeleton);
         else
             navElem = [tocSkeleton(entries)];
+        function toList(xs) {
+            if (xs === undefined)
+                return [];
+            else if (typeof xs === "string")
+                return [xs];
+            else
+                return xs;
+        }
+        const settings = this.settings();
+        const css = toList(settings.css);
+        const js = toList(settings.js);
         let outputAst = {
             type: 'root',
             children: [
@@ -175,7 +186,14 @@ export default class VitepressDocProcessor extends WProcessor {
                                     properties: { href: `./${"../".repeat(parentHeight)}vp-styles.css`, rel: ['stylesheet'] },
                                     children: [],
                                 },
-                            ],
+                            ].concat(css.map(elem => {
+                                return {
+                                    type: 'element',
+                                    tagName: 'link',
+                                    properties: { href: elem, rel: ['stylesheet'] },
+                                    children: [],
+                                };
+                            })),
                         },
                         {
                             type: 'element',
@@ -221,7 +239,14 @@ export default class VitepressDocProcessor extends WProcessor {
                                     properties: { src: `./${"../".repeat(parentHeight)}vp-script.js` },
                                     children: [],
                                 },
-                            ],
+                            ].concat(js.map(elem => {
+                                return {
+                                    type: 'element',
+                                    tagName: 'script',
+                                    properties: { src: elem },
+                                    children: [],
+                                };
+                            })),
                         }
                     ],
                 }

@@ -9,6 +9,11 @@ import WProcessor from "webpan/dist/types/processor.js";
 import { ProcessorOutputRaw } from "webpan/dist/types/processorStates.js";
 import UnifiedProcessor from "wp-unified";
 
+interface Options {
+    css?: string[] | string
+    js?: string[] | string
+}
+
 function runRename(expr: string, pathToProccess: string) {
     function ext(newExt: string) {
         return (pathAny: string) => {
@@ -164,6 +169,19 @@ export default class VitepressDocProcessor extends WProcessor {
         else
             navElem = [tocSkeleton(entries)]
 
+        function toList(xs: string[] | string | undefined): string[] {
+            if (xs === undefined)
+                return []
+            else if (typeof xs === "string")
+                return [xs]
+            else
+                return xs
+        }
+
+        const settings = this.settings() as Options
+        const css = toList(settings.css)
+        const js = toList(settings.js)
+
         let outputAst: Root = {
             type: 'root',
             children: [
@@ -205,7 +223,14 @@ export default class VitepressDocProcessor extends WProcessor {
                                     properties: { href: `./${"../".repeat(parentHeight)}vp-styles.css`, rel: ['stylesheet'] },
                                     children: [],
                                 },
-                            ],
+                            ].concat(css.map(elem => {
+                                return {
+                                    type: 'element',
+                                    tagName: 'link',
+                                    properties: { href: elem, rel: ['stylesheet'] },
+                                    children: [],
+                                }
+                            })) as Element[],
                         },
                         {
                             type: 'element',
@@ -251,7 +276,14 @@ export default class VitepressDocProcessor extends WProcessor {
                                     properties: { src: `./${"../".repeat(parentHeight)}vp-script.js` },
                                     children: [],
                                 },
-                            ],
+                            ].concat(js.map(elem => {
+                                return {
+                                    type: 'element',
+                                    tagName: 'script',
+                                    properties: { src: elem },
+                                    children: [],
+                                }
+                            })) as Element[],
                         }
                     ],
                 }
