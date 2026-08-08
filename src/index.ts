@@ -7,7 +7,7 @@ import { FileNamedProcOne } from "webpan/dist/types/processor.js";
 import type { TocEntryOrdered } from "wp-dir-toc"
 import WProcessor from "webpan/dist/types/processor.js";
 import { ProcessorOutputRaw } from "webpan/dist/types/processorStates.js";
-import UnifiedProcessor from "wp-unified";
+import type UnifiedProcessor from "wp-unified";
 
 interface Options {
     css?: string[] | string
@@ -104,9 +104,35 @@ export default class VitepressDocProcessor extends WProcessor {
         if (dirTocProcRes === undefined)
             throw new Error("could not find dir-toc in parent of current file")
 
+        let bookHeight = 0;
+        let bookPath = this.filePath({ absolute: true }).split("/")
+        let bookProc: FileNamedProcOne | undefined = undefined;
+
+        // finding yaml-parser
+        while (bookPath.length > 1) {
+            bookPath.pop();
+            let path = `${bookPath.join("/")}/book.yml`
+            bookProc = this.files({ include: path, absolute: true }).values().next()?.value?.procs({ include: "yaml-parse" }).get("yaml-parse")?.values().next().value as unknown as FileNamedProcOne
+
+            if (bookProc !== undefined)
+                break;
+
+            bookHeight++;
+        }
+
+        let bookRes = await bookProc?.getResult();
+        if (bookRes === undefined)
+            throw new Error("could not find book.yml in parent of current file")
+
+        let bookTitle = bookRes.result.title ?? "Unspecified title";
+        let bookRoot = "../".repeat(bookHeight);
+
         function tocSkeleton(entry: TocEntryOrdered): Element {
             switch (entry.type) {
                 case "file":
+                    let filePath = path.parse(entry.sourceRel);
+                    filePath.ext = "html";
+                    filePath.base = "";
                     return {
                         type: 'element',
                         tagName: 'div',
@@ -115,7 +141,7 @@ export default class VitepressDocProcessor extends WProcessor {
                             {
                                 type: 'element',
                                 tagName: 'a',
-                                properties: { href: '' },
+                                properties: { href: `${"../".repeat(dirTocHeight)}${path.format(filePath)}` },
                                 children: [
                                     {
                                         type: 'text',
@@ -249,6 +275,26 @@ export default class VitepressDocProcessor extends WProcessor {
                                             children: [
                                                 {
                                                     type: 'element',
+                                                    tagName: 'div',
+                                                    properties: { className: ['vp-sidebar-topbar'] },
+                                                    children:
+                                                        [
+
+                                                            {
+                                                                type: 'element',
+                                                                tagName: 'a',
+                                                                properties: { href: bookRoot },
+                                                                children: [
+                                                                    {
+                                                                        type: 'text',
+                                                                        value: bookTitle,
+                                                                    }
+                                                                ],
+                                                            }
+                                                        ],
+                                                },
+                                                {
+                                                    type: 'element',
                                                     tagName: 'nav',
                                                     properties: { className: ['vp-sidebar-nav'] },
                                                     children: navElem,
@@ -260,6 +306,26 @@ export default class VitepressDocProcessor extends WProcessor {
                                             tagName: 'div',
                                             properties: { className: ['vp-doc-container'] },
                                             children: [
+                                                {
+                                                    type: 'element',
+                                                    tagName: 'div',
+                                                    properties: { className: ['vp-doc-topbar'] },
+                                                    children:
+                                                        [
+
+                                                            {
+                                                                type: 'element',
+                                                                tagName: 'a',
+                                                                properties: { href: bookRoot },
+                                                                children: [
+                                                                    {
+                                                                        type: 'text',
+                                                                        value: bookTitle,
+                                                                    }
+                                                                ],
+                                                            }
+                                                        ],
+                                                },
                                                 {
                                                     type: 'element',
                                                     tagName: 'main',
