@@ -56,10 +56,13 @@ export default class VitepressDocProcessor extends WProcessor {
         let stack: any[] = unifiedSettings.stack ?? [];
 
         let pluginIndex: null | number = null;
+        let frontMatterIndex: null | number = null;
 
-        for (const [index, plugin] of stack.map((plugin, index) => [index, plugin]).reverse()) {
+        for (const [index, plugin] of stack.map((plugin, index) => [index, plugin])) {
             if (plugin.vpUseAst === true)
                 pluginIndex = index;
+            if (plugin === "remark-frontmatter" || plugin?.name === "remark-frontmatter")
+                frontMatterIndex = index;
         }
 
         if (pluginIndex === null)
@@ -71,6 +74,8 @@ export default class VitepressDocProcessor extends WProcessor {
         let parentHeight = 0;
         let parentPath = this.filePath({ absolute: true }).split("/")
         let resourceProc: FileNamedProcOne | undefined = undefined;
+
+        const frontMatter: Record<string, any> = frontMatterIndex === null ? {} : unifiedRes.getResult(frontMatterIndex)?.result ?? {};
 
         // finding vitepress resources
         while (parentPath.length > 1) {
@@ -127,25 +132,32 @@ export default class VitepressDocProcessor extends WProcessor {
         let bookTitle = bookRes.result.title ?? "Unspecified title";
         let bookRoot = "../".repeat(bookHeight);
 
-        function tocSkeleton(entry: TocEntryOrdered): Element {
+        const tocSkeleton = (entry: TocEntryOrdered): Element => {
             switch (entry.type) {
                 case "file":
-                    let filePath = path.parse(entry.sourceRel);
+                    let filePath = path.parse(path.join("../".repeat(dirTocHeight), entry.sourceRel));
+
+                    let className = ['container']; path.join(this.filePath({ absolute: true }), path.format(filePath)) === this.filePath({ absolute: true })
+                    if (path.join(this.filePath({ absolute: true }), "../", path.format(filePath)) === this.filePath({ absolute: true })) {
+                        className.push("nav-selected")
+                    }
+
                     filePath.ext = "html";
                     filePath.base = "";
+
                     return {
                         type: 'element',
                         tagName: 'div',
-                        properties: { className: ['container'] },
+                        properties: { className },
                         children: [
                             {
                                 type: 'element',
                                 tagName: 'a',
-                                properties: { href: `${"../".repeat(dirTocHeight)}${path.format(filePath)}` },
+                                properties: { href: path.format(filePath) },
                                 children: [
                                     {
                                         type: 'text',
-                                        value: path.parse(entry.sourceRel).base,
+                                        value: entry.frontMatter?.title ?? path.parse(entry.sourceRel).name,
                                     }
                                 ],
                             },
@@ -169,7 +181,7 @@ export default class VitepressDocProcessor extends WProcessor {
                                         children: [
                                             {
                                                 type: 'text',
-                                                value: path.parse(entry.sourceRel).base,
+                                                value: entry.meta?.title ?? path.basename(entry.sourceRel),
                                             }
                                         ],
                                     },
@@ -241,7 +253,12 @@ export default class VitepressDocProcessor extends WProcessor {
                                     type: 'element',
                                     tagName: 'title',
                                     properties: {},
-                                    children: [],
+                                    children: [
+                                        {
+                                            type: 'text',
+                                            value: frontMatter.title ?? "No title",
+                                        }
+                                    ],
                                 },
                                 {
                                     type: 'element',
@@ -263,6 +280,12 @@ export default class VitepressDocProcessor extends WProcessor {
                             tagName: 'body',
                             properties: { className: ['dark'] },
                             children: [
+                                {
+                                    type: 'element',
+                                    tagName: 'div',
+                                    properties: { id: 'vp-mobile-backdrop' },
+                                    children: []
+                                },
                                 {
                                     type: 'element',
                                     tagName: 'div',
@@ -316,11 +339,31 @@ export default class VitepressDocProcessor extends WProcessor {
                                                             {
                                                                 type: 'element',
                                                                 tagName: 'a',
-                                                                properties: { href: bookRoot },
+                                                                properties: { href: bookRoot, className: ['vp-doc-topbar-title'] },
                                                                 children: [
                                                                     {
                                                                         type: 'text',
                                                                         value: bookTitle,
+                                                                    }
+                                                                ],
+                                                            }
+                                                        ],
+                                                },
+                                                {
+                                                    type: 'element',
+                                                    tagName: 'div',
+                                                    properties: { className: ['vp-doc-mobile-bar'] },
+                                                    children:
+                                                        [
+
+                                                            {
+                                                                type: 'element',
+                                                                tagName: 'div',
+                                                                properties: { id: 'vp-mobile-toc-button' },
+                                                                children: [
+                                                                    {
+                                                                        type: 'text',
+                                                                        value: "Table of contents",
                                                                     }
                                                                 ],
                                                             }
