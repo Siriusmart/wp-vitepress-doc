@@ -4,7 +4,7 @@ import path from "path";
 import rehypeStringify from "rehype-stringify";
 import { unified } from "unified";
 import { FileNamedProcOne } from "webpan/dist/types/processor.js";
-import type { TocEntryOrdered } from "wp-dir-toc"
+import { after, before, type FileEntry, type TocEntryOrdered } from "wp-dir-toc"
 import WProcessor from "webpan/dist/types/processor.js";
 import { ProcessorOutputRaw } from "webpan/dist/types/processorStates.js";
 import type UnifiedProcessor from "wp-unified";
@@ -132,14 +132,18 @@ export default class VitepressDocProcessor extends WProcessor {
         let bookTitle = bookRes.result.title ?? "Unspecified title";
         let bookRoot = "../".repeat(bookHeight);
 
+        let selectedEntry: undefined | FileEntry;
+
         const tocSkeleton = (entry: TocEntryOrdered): Element => {
             switch (entry.type) {
                 case "file":
-                    let filePath = path.parse(path.join("../".repeat(dirTocHeight), entry.sourceRel));
+                    let filePath = path.parse(path.join("./", "../".repeat(dirTocHeight), entry.sourceRel));
 
                     let className = ['container']; path.join(this.filePath({ absolute: true }), path.format(filePath)) === this.filePath({ absolute: true })
-                    if (path.join(this.filePath({ absolute: true }), "../", path.format(filePath)) === this.filePath({ absolute: true })) {
+                    if (selectedEntry === undefined && path.join(this.filePath({ absolute: true }), "../", path.format(filePath)) === this.filePath({ absolute: true })) {
                         className.push("nav-selected")
+                        assert(entry.type === "file");
+                        selectedEntry = entry;
                     }
 
                     filePath.ext = "html";
@@ -164,6 +168,8 @@ export default class VitepressDocProcessor extends WProcessor {
                         ],
                     }
                 case "dir":
+                    let dirName: string = entry.meta?.title || path.basename(entry.sourceRel);
+                    if (dirName.length === 0) dirName = "/";
                     return {
                         type: "element",
                         tagName: "div",
@@ -181,7 +187,7 @@ export default class VitepressDocProcessor extends WProcessor {
                                         children: [
                                             {
                                                 type: 'text',
-                                                value: entry.meta?.title ?? path.basename(entry.sourceRel),
+                                                value: dirName,
                                             }
                                         ],
                                     },
@@ -201,7 +207,7 @@ export default class VitepressDocProcessor extends WProcessor {
         let entries = dirTocProcRes.result as TocEntryOrdered;
         let navElem: Element[];
 
-        // strip one layer if top level are all dirs
+        // strip top level are all dirs
         if (entries.type === "dir" && entries.children.every(child => child.type === "dir"))
             navElem = entries.children.map(tocSkeleton)
         else
@@ -219,6 +225,95 @@ export default class VitepressDocProcessor extends WProcessor {
         const settings = this.settings() as Options
         const css = toList(settings.css)
         const js = toList(settings.js)
+
+        let beforeNext: undefined | Element;
+
+        if (selectedEntry) {
+            function urlOfEntry(entry: FileEntry): string {
+                let filePath = path.parse(path.join("./", "../".repeat(dirTocHeight), entry.sourceRel));
+                filePath.ext = "html";
+                filePath.base = "";
+                return path.format(filePath);
+            }
+
+            beforeNext = {
+                type: 'element',
+                tagName: 'div',
+                properties: { className: ['vp-beforenext'] },
+                children: []
+            }
+
+            const prev = before(dirTocProcRes.result, selectedEntry);
+            if (prev) {
+                beforeNext.children.push(
+                    {
+                        type: 'element',
+                        tagName: 'a',
+                        properties: { className: ['vp-beforebox'], href: urlOfEntry(prev) },
+                        children: [
+                            {
+                                type: 'element',
+                                tagName: 'div',
+                                properties: { className: ['vp-before-title'] },
+                                children: [
+                                    {
+                                        type: 'text',
+                                        value: `Previous page`,
+                                    },
+                                ],
+                            },
+                            {
+                                type: 'element',
+                                tagName: 'div',
+                                properties: { className: ['vp-before-name'] },
+                                children: [
+                                    {
+                                        type: 'text',
+                                        value: prev.meta?.title ?? path.parse(prev.sourceRel).name,
+                                    },
+                                ],
+                            }
+                        ],
+                    }
+                )
+            }
+
+            const succ = after(dirTocProcRes.result, selectedEntry);
+            if (succ) {
+                if (prev === undefined) beforeNext.children.push({ type: 'element', tagName: 'div', properties: {}, children: [] })
+                beforeNext.children.push(
+                    {
+                        type: 'element',
+                        tagName: 'a',
+                        properties: { className: ['vp-afterbox'], href: urlOfEntry(succ) },
+                        children: [
+                            {
+                                type: 'element',
+                                tagName: 'div',
+                                properties: { className: ['vp-after-title'] },
+                                children: [
+                                    {
+                                        type: 'text',
+                                        value: `Next page`,
+                                    },
+                                ],
+                            },
+                            {
+                                type: 'element',
+                                tagName: 'div',
+                                properties: { className: ['vp-after-name'] },
+                                children: [
+                                    {
+                                        type: 'text',
+                                        value: succ.meta?.title ?? path.parse(succ.sourceRel).name,
+                                    },
+                                ],
+                            }
+                        ],
+                    }
+                )
+            }
+        }
 
         let outputAst: Root = {
             type: 'root',
@@ -371,9 +466,17 @@ export default class VitepressDocProcessor extends WProcessor {
                                                 },
                                                 {
                                                     type: 'element',
-                                                    tagName: 'main',
+                                                    tagName: 'div',
                                                     properties: { className: ['vp-doc'] },
-                                                    children: structuredClone(snapshot.children) as ElementContent[],
+                                                    children: [
+                                                        {
+                                                            type: 'element',
+                                                            tagName: 'main',
+                                                            properties: { className: ['vp-doc-content'] },
+                                                            children: structuredClone(snapshot.children) as ElementContent[],
+                                                        },
+                                                        beforeNext
+                                                    ]
                                                 },
                                             ],
                                         },
