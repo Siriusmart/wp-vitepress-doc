@@ -226,7 +226,7 @@ export default class VitepressDocProcessor extends WProcessor {
         const css = toList(settings.css)
         const js = toList(settings.js)
 
-        let beforeNext: undefined | Element;
+        let beforeNext: Element[] = [];
 
         if (selectedEntry) {
             function urlOfEntry(entry: FileEntry): string {
@@ -236,7 +236,7 @@ export default class VitepressDocProcessor extends WProcessor {
                 return path.format(filePath);
             }
 
-            beforeNext = {
+            let beforeNextElem: Element = {
                 type: 'element',
                 tagName: 'div',
                 properties: { className: ['vp-beforenext'] },
@@ -245,7 +245,7 @@ export default class VitepressDocProcessor extends WProcessor {
 
             const prev = before(dirTocProcRes.result, selectedEntry);
             if (prev) {
-                beforeNext.children.push(
+                beforeNextElem.children.push(
                     {
                         type: 'element',
                         tagName: 'a',
@@ -280,8 +280,8 @@ export default class VitepressDocProcessor extends WProcessor {
 
             const succ = after(dirTocProcRes.result, selectedEntry);
             if (succ) {
-                if (prev === undefined) beforeNext.children.push({ type: 'element', tagName: 'div', properties: {}, children: [] })
-                beforeNext.children.push(
+                if (prev === undefined) beforeNextElem.children.push({ type: 'element', tagName: 'div', properties: {}, children: [] })
+                beforeNextElem.children.push(
                     {
                         type: 'element',
                         tagName: 'a',
@@ -312,6 +312,10 @@ export default class VitepressDocProcessor extends WProcessor {
                         ],
                     }
                 )
+            }
+
+            if (prev || succ) {
+                beforeNext = [beforeNextElem]
             }
         }
 
@@ -475,7 +479,7 @@ export default class VitepressDocProcessor extends WProcessor {
                                                             properties: { className: ['vp-doc-content'] },
                                                             children: structuredClone(snapshot.children) as ElementContent[],
                                                         },
-                                                        beforeNext
+                                                        ...beforeNext
                                                     ]
                                                 },
                                             ],

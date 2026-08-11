@@ -181,7 +181,7 @@ export default class VitepressDocProcessor extends WProcessor {
         const settings = this.settings();
         const css = toList(settings.css);
         const js = toList(settings.js);
-        let beforeNext;
+        let beforeNext = [];
         if (selectedEntry) {
             function urlOfEntry(entry) {
                 let filePath = path.parse(path.join("./", "../".repeat(dirTocHeight), entry.sourceRel));
@@ -189,7 +189,7 @@ export default class VitepressDocProcessor extends WProcessor {
                 filePath.base = "";
                 return path.format(filePath);
             }
-            beforeNext = {
+            let beforeNextElem = {
                 type: 'element',
                 tagName: 'div',
                 properties: { className: ['vp-beforenext'] },
@@ -197,7 +197,7 @@ export default class VitepressDocProcessor extends WProcessor {
             };
             const prev = before(dirTocProcRes.result, selectedEntry);
             if (prev) {
-                beforeNext.children.push({
+                beforeNextElem.children.push({
                     type: 'element',
                     tagName: 'a',
                     properties: { className: ['vp-beforebox'], href: urlOfEntry(prev) },
@@ -230,8 +230,8 @@ export default class VitepressDocProcessor extends WProcessor {
             const succ = after(dirTocProcRes.result, selectedEntry);
             if (succ) {
                 if (prev === undefined)
-                    beforeNext.children.push({ type: 'element', tagName: 'div', properties: {}, children: [] });
-                beforeNext.children.push({
+                    beforeNextElem.children.push({ type: 'element', tagName: 'div', properties: {}, children: [] });
+                beforeNextElem.children.push({
                     type: 'element',
                     tagName: 'a',
                     properties: { className: ['vp-afterbox'], href: urlOfEntry(succ) },
@@ -260,6 +260,9 @@ export default class VitepressDocProcessor extends WProcessor {
                         }
                     ],
                 });
+            }
+            if (prev || succ) {
+                beforeNext = [beforeNextElem];
             }
         }
         let outputAst = {
@@ -416,7 +419,7 @@ export default class VitepressDocProcessor extends WProcessor {
                                                             properties: { className: ['vp-doc-content'] },
                                                             children: structuredClone(snapshot.children),
                                                         },
-                                                        beforeNext
+                                                        ...beforeNext
                                                     ]
                                                 },
                                             ],
