@@ -2,7 +2,7 @@ import assert from "assert";
 import path from "path";
 import rehypeStringify from "rehype-stringify";
 import { unified } from "unified";
-import { after, before } from "wp-dir-toc";
+import { after, before, first, getByPath } from "wp-dir-toc";
 import WProcessor from "webpan/dist/types/processor.js";
 function runRename(expr, pathToProccess) {
     function ext(newExt) {
@@ -27,12 +27,38 @@ function runRename(expr, pathToProccess) {
 }
 export default class VitepressDocProcessor extends WProcessor {
     async build(content) {
-        if (content === "dir")
-            return {};
-        let file = this.files({ include: this.filePath() }).values().next().value;
+        let absFilePath = this.filePath({ absolute: true });
+        // finding dir-toc
+        let dirTocHeight = 0;
+        let dirTocPath = absFilePath.split("/");
+        let dirTocProc = undefined;
+        while (dirTocPath.length > 1) {
+            dirTocPath.pop();
+            let path = `${dirTocPath.join("/")}/`;
+            dirTocProc = this.files({ include: path, absolute: true }).values().next()?.value?.procs({ include: "dir-toc" }).get("dir-toc")?.values().next().value;
+            if (dirTocProc !== undefined)
+                break;
+            dirTocHeight++;
+        }
+        let dirTocProcRes = await dirTocProc?.getResult();
+        if (dirTocProcRes === undefined)
+            throw new Error("could not find dir-toc in parent of current file");
+        // try to use first file as current page
+        if (content === "dir") {
+            const entries = dirTocProcRes.result;
+            const dirToc = getByPath(entries, absFilePath);
+            if (dirToc === undefined)
+                return {};
+            assert(dirToc.type === "dir");
+            const replacement = first(dirToc);
+            if (replacement === undefined)
+                return {};
+            absFilePath = replacement.sourceAbs;
+        }
+        let file = this.files({ include: absFilePath, absolute: true }).values().next().value;
         let proc = file?.procs({ include: "unified" }).values().toArray()[0];
         if (proc === undefined)
-            throw new Error(`file ${this.filePath()} does not have unified attached`);
+            throw new Error(`file ${absFilePath} does not have unified attached`);
         let unifiedProc = proc.values().toArray()[0];
         assert(unifiedProc !== undefined);
         let unifiedSettings = unifiedProc.getSettings();
@@ -50,7 +76,7 @@ export default class VitepressDocProcessor extends WProcessor {
         let unifiedRes = await unifiedProc.getProcessor();
         let snapshot = unifiedRes.getResult(pluginIndex)?.snapshot;
         let parentHeight = 0;
-        let parentPath = this.filePath({ absolute: true }).split("/");
+        let parentPath = absFilePath.split("/");
         let resourceProc = undefined;
         const frontMatter = frontMatterIndex === null ? {} : unifiedRes.getResult(frontMatterIndex)?.result ?? {};
         // finding vitepress resources
@@ -62,23 +88,8 @@ export default class VitepressDocProcessor extends WProcessor {
                 break;
             parentHeight++;
         }
-        let dirTocHeight = 0;
-        let dirTocPath = this.filePath({ absolute: true }).split("/");
-        let dirTocProc = undefined;
-        // finding dir-toc
-        while (dirTocPath.length > 1) {
-            dirTocPath.pop();
-            let path = `${dirTocPath.join("/")}/`;
-            dirTocProc = this.files({ include: path, absolute: true }).values().next()?.value?.procs({ include: "dir-toc" }).get("dir-toc")?.values().next().value;
-            if (dirTocProc !== undefined)
-                break;
-            dirTocHeight++;
-        }
-        let dirTocProcRes = await dirTocProc?.getResult();
-        if (dirTocProcRes === undefined)
-            throw new Error("could not find dir-toc in parent of current file");
         let bookHeight = 0;
-        let bookPath = this.filePath({ absolute: true }).split("/");
+        let bookPath = absFilePath.split("/");
         let bookProc = undefined;
         // finding yaml-parser
         while (bookPath.length > 1) {
@@ -93,6 +104,11 @@ export default class VitepressDocProcessor extends WProcessor {
         if (bookRes === undefined)
             throw new Error("could not find book.yml in parent of current file");
         let bookTitle = bookRes.result.title ?? "Unspecified title";
+        if (content === "dir") {
+            bookHeight--;
+            dirTocHeight--;
+            parentHeight--;
+        }
         let bookRoot = "../".repeat(bookHeight);
         let selectedEntry;
         const tocSkeleton = (entry) => {
@@ -100,8 +116,8 @@ export default class VitepressDocProcessor extends WProcessor {
                 case "file":
                     let filePath = path.parse(path.join("./", "../".repeat(dirTocHeight), entry.sourceRel));
                     let className = ['container'];
-                    path.join(this.filePath({ absolute: true }), path.format(filePath)) === this.filePath({ absolute: true });
-                    if (selectedEntry === undefined && path.join(this.filePath({ absolute: true }), "../", path.format(filePath)) === this.filePath({ absolute: true })) {
+                    path.join(absFilePath, path.format(filePath)) === absFilePath;
+                    if (selectedEntry === undefined && path.join(absFilePath, "../", path.format(filePath)) === absFilePath) {
                         className.push("nav-selected");
                         assert(entry.type === "file");
                         selectedEntry = entry;
@@ -449,9 +465,9 @@ export default class VitepressDocProcessor extends WProcessor {
         let output = unified()
             .use(rehypeStringify, { allowDangerousHtml: true })
             .stringify(outputAst);
-        let outPath = runRename(`${this.settings().output}`, this.filePath());
+        let outPath = content === "dir" ? "index.html" : runRename(`${this.settings().output}`, this.filePath());
         return {
-            relative: new Map([[outPath, { buffer: output, priority: this.settings().priority ?? 0 }]]),
+            relative: new Map([[outPath, { buffer: output, priority: this.settings().priority ?? 100 }]]),
         };
     }
 }
