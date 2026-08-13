@@ -1,6 +1,6 @@
 {
     "name": "wp-vitepress-doc",
-    "version": "0.1.9",
+    "version": "0.1.10",
     "description": "Vitepress style page document generator.",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",

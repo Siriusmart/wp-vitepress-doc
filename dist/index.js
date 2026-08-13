@@ -28,14 +28,19 @@ function runRename(expr, pathToProccess) {
 export default class VitepressDocProcessor extends WProcessor {
     async build(content) {
         let absFilePath = this.filePath({ absolute: true });
+        // directory the output page lives in, kept separate because absFilePath
+        // gets redirected to the first article when building a directory index
+        const pageDir = content === "dir"
+            ? path.join(absFilePath, "/")
+            : path.join(absFilePath, "../");
         // finding dir-toc
         let dirTocHeight = 0;
         let dirTocPath = absFilePath.split("/");
         let dirTocProc = undefined;
         while (dirTocPath.length > 1) {
             dirTocPath.pop();
-            let path = `${dirTocPath.join("/")}/`;
-            dirTocProc = this.files({ include: path, absolute: true }).values().next()?.value?.procs({ include: "dir-toc" }).get("dir-toc")?.values().next().value;
+            let tryPath = path.join(dirTocPath.join("/"), "/");
+            dirTocProc = this.files({ include: tryPath, absolute: true }).values().next()?.value?.procs({ include: "dir-toc" }).get("dir-toc")?.values().next().value;
             if (dirTocProc !== undefined)
                 break;
             dirTocHeight++;
@@ -46,7 +51,8 @@ export default class VitepressDocProcessor extends WProcessor {
         // try to use first file as current page
         if (content === "dir") {
             const entries = dirTocProcRes.result;
-            const dirToc = getByPath(entries, absFilePath);
+            // getByPath only looks at descendants, so the dir-toc root has to be matched here
+            const dirToc = entries.sourceAbs === pageDir ? entries : getByPath(entries, absFilePath);
             if (dirToc === undefined)
                 return {};
             assert(dirToc.type === "dir");
@@ -76,7 +82,7 @@ export default class VitepressDocProcessor extends WProcessor {
         let unifiedRes = await unifiedProc.getProcessor();
         let snapshot = unifiedRes.getResult(pluginIndex)?.snapshot;
         let parentHeight = 0;
-        let parentPath = absFilePath.split("/");
+        let parentPath = pageDir.split("/");
         let resourceProc = undefined;
         const frontMatter = frontMatterIndex === null ? {} : unifiedRes.getResult(frontMatterIndex)?.result ?? {};
         // finding vitepress resources
@@ -89,7 +95,7 @@ export default class VitepressDocProcessor extends WProcessor {
             parentHeight++;
         }
         let bookHeight = 0;
-        let bookPath = absFilePath.split("/");
+        let bookPath = pageDir.split("/");
         let bookProc = undefined;
         // finding yaml-parser
         while (bookPath.length > 1) {
@@ -104,20 +110,14 @@ export default class VitepressDocProcessor extends WProcessor {
         if (bookRes === undefined)
             throw new Error("could not find book.yml in parent of current file");
         let bookTitle = bookRes.result.title ?? "Unspecified title";
-        if (content === "dir") {
-            bookHeight--;
-            dirTocHeight--;
-            parentHeight--;
-        }
-        let bookRoot = "../".repeat(bookHeight);
+        let bookRoot = bookHeight === 0 ? "./" : "../".repeat(bookHeight);
         let selectedEntry;
         const tocSkeleton = (entry) => {
             switch (entry.type) {
                 case "file":
                     let filePath = path.parse(path.join("./", "../".repeat(dirTocHeight), entry.sourceRel));
                     let className = ['container'];
-                    path.join(absFilePath, path.format(filePath)) === absFilePath;
-                    if (selectedEntry === undefined && path.join(absFilePath, "../", path.format(filePath)) === absFilePath) {
+                    if (selectedEntry === undefined && path.join(pageDir, path.format(filePath)) === absFilePath) {
                         className.push("nav-selected");
                         assert(entry.type === "file");
                         selectedEntry = entry;
@@ -465,7 +465,7 @@ export default class VitepressDocProcessor extends WProcessor {
         let output = unified()
             .use(rehypeStringify, { allowDangerousHtml: true })
             .stringify(outputAst);
-        let outPath = content === "dir" ? "index.html" : runRename(`${this.settings().output}`, this.filePath());
+        let outPath = content === "dir" ? path.join(this.filePath(), "index.html") : runRename(`${this.settings().output}`, this.filePath());
         return {
             relative: new Map([[outPath, { buffer: output, priority: this.settings().priority ?? 100 }]]),
         };
